@@ -1,85 +1,112 @@
 from CovertChannelBase import CovertChannelBase
 from scapy.all import IP, TCP, send, sniff
 import random
+import time
 
 class MyCovertChannel(CovertChannelBase):
     """
     - You are not allowed to change the file name and class name.
     - You can edit the class in any way you want (e.g. adding helper functions); however, there must be a "send" and a "receive" function, the covert channel will be triggered by calling these functions.
     """
+
+    pkt_counter = 0
+    stop = False
+    packets = []
+    N_counter = 0
+    bit_counter = 0
+    bits = ""
+    msg = ""
+
     def __init__(self):
         """
         - You can edit __init__.
         """
         pass
+
     def send(self, log_file_name, N):
         """
         N describes the number of packets that we send for each bit of the message.
         For each bit, we generate N packets with some of them having PSH flag set randomly.
-        If the bit in the message is 1, among these N packets, we set PSH=1 such that total number of packets with PSH=1 is not divisible by 1.
-        If the bit in the message is 0, among these N packets, we set PSH=1 such that total number of packets with PSH=1 is divisible by 1.
+        If the bit in the message is 1, among these N packets, we set PSH=1 such that total number of packets with PSH=1 is not divisible by 2.
+        If the bit in the message is 0, among these N packets, we set PSH=1 such that total number of packets with PSH=1 is divisible by 2.
         """
 
+        assert N > 1, "N should be bigger than 1"
+
         binary_message = self.generate_random_binary_message_with_logging(log_file_name)
-        
+        # binary_message = self.convert_string_message_to_binary("a" * 3 + ".")
+
         for bit in binary_message:
             packets = []
+            num = 0
 
-            for i in range(N - 1):
+            for _ in range(N - 1):
                 rand_int = random.randint(0, 1)
-                if rand_int:
+                if rand_int == 1:
                     packet = IP(dst="receiver") / TCP(flags="P")
-                    packets.append((1, packet))
+                    packets.append(packet)
+                    num += 1
                 else:
                     packet = IP(dst="receiver") / TCP(flags="")
-                    packets.append((0, packet))
-                
-            num = 0
-            for packet in packets:
-                num += packet[0]
+                    packets.append(packet)
             
-            if bit:
+            if bit == "1":
                 if num % 2 == 0:
                     packet = IP(dst="receiver") / TCP(flags="P")
-                    packets.append((1, packet))
+                    packets.append(packet)
                 else:
                     packet = IP(dst="receiver") / TCP(flags="")
-                    packets.append((0, packet))
+                    packets.append(packet)
             else:
                 if num % 2 == 0:
                     packet = IP(dst="receiver") / TCP(flags="")
-                    packets.append((0, packet))
+                    packets.append(packet)
                 else:
                     packet = IP(dst="receiver") / TCP(flags="P")
-                    packets.append((1, packet))
+                    packets.append(packet)
 
             for packet in packets:
-                send(packet[1])
+                super().send(packet)
 
+    def process_packet(self, pkt, N):
+        if self.pkt_counter % 2 == 0:
+            self.packets.append(pkt)
+
+            self.N_counter += 1
+            if self.N_counter == N:
+                self.N_counter = 0
+
+                num = 0
+                for packet in self.packets:
+                    if packet[TCP].flags & 0x08:
+                        num += 1
+                self.packets = []
+                
+                bit = '0' if num % 2 == 0 else '1'
+                self.bits += bit
+
+                if len(self.bits) == 8:
+                    char = self.convert_eight_bits_to_character(self.bits)
+                    self.msg += char
+                    self.bits = ""
+
+                    if char == ".":
+                        self.stop = True
+
+        self.pkt_counter += 1
+            
+    def check_stop(self, packet):
+        return self.stop
 
     def receive(self, log_file_name, N):
         """
-        - In this function, you are expected to receive and decode the transferred message. Because there are many types of covert channels, the receiver implementation depends on the chosen covert channel type, and you may not need to use the functions in CovertChannelBase.
-        - After the implementation, please rewrite this comment part to explain your code basically.
+        ------------------------- DÖKÜMANTASYON YAZILACAK ----------------------------------
         """
 
-        msg = ""
+        assert N > 1, "N should be bigger than 1"
 
-        while True:
-            packets = sniff(filter="tcp and host sender", count=N)
+        packets = sniff(filter="tcp",
+                        prn=lambda pkt: self.process_packet(pkt, N),
+                        stop_filter=self.check_stop)
 
-            num = 0
-            for packet in packets:
-                if packet[TCP].flags & 0x08:
-                    num += 1
-            
-            msg += str(num % 2)
-            
-        decoded_msg = ""
-
-        for i in range(len(msg)-8):
-            char = self.convert_eight_bits_to_character(msg[i:i+8])
-            decoded_msg += char
-            i += 8
-
-        self.log_message(decoded_msg, log_file_name)
+        self.log_message(self.msg, log_file_name)

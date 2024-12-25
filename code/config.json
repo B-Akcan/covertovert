@@ -3,13 +3,13 @@
   "send": {
     "parameters": {
       "log_file_name": "sender.log",
-      "N": 5
+      "N": 3
     }
   },
   "receive": {
     "parameters": {
       "log_file_name": "receiver.log",
-      "N": 5
+      "N": 3
     }
   }
 }
