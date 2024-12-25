@@ -2,17 +2,14 @@
   "covert_channel_code": "CSC-PSV-TCP-PSH",
   "send": {
     "parameters": {
-      "parameter1": "p1",
-      "parameter2": 1234,
-      "log_file_name": "sender.log"
+      "log_file_name": "sender.log",
+      "N": 5
     }
   },
   "receive": {
     "parameters": {
-      "parameter1": "p1",
-      "parameter2": 1234,
-      "parameter3": "p3",
-      "log_file_name": "receiver.log"
+      "log_file_name": "receiver.log",
+      "N": 5
     }
   }
 }
