@@ -26,13 +26,14 @@ class MyCovertChannel(CovertChannelBase):
     def send(self, log_file_name, min_msg_length, max_msg_length, N):
         """
         N describes the number of packets that we send for each bit of the message.
+        N should be bigger than 1. Otherwise there will be no encoding.
         Sender N and receiver N must be the same.
 
         For each bit of the message, we generate N packets with some of them having PSH flag set randomly.
         If the bit in the message is 1, among these N packets, we set PSH=1 such that total number of packets with PSH=1 is odd.
         If the bit in the message is 0, among these N packets, we set PSH=1 such that total number of packets with PSH=1 is even.
         Then, we send these N packets and continue with the next bit of the message.
-        
+
         We calculate the start time as the time just after this function is called, end time as the time just after the last packet is sent.
         Transmission time is the difference between end time and start time. Transmission rate is binary message length divided by transmission time.
         """
@@ -111,6 +112,7 @@ class MyCovertChannel(CovertChannelBase):
     def receive(self, log_file_name, N):
         """
         N describes the number of packets that we receive for each bit of the message.
+        N should be bigger than 1. Otherwise there will be no encoding.
         Sender N and receiver N must be the same.
 
         Due to the Scapy's working internals, sender sends 2 packets for each packet we send.
