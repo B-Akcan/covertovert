@@ -23,18 +23,23 @@ class MyCovertChannel(CovertChannelBase):
         """
         pass
 
-    def send(self, log_file_name, N):
+    def send(self, log_file_name, min_msg_length, max_msg_length, N):
         """
         N describes the number of packets that we send for each bit of the message.
-        For each bit, we generate N packets with some of them having PSH flag set randomly.
-        If the bit in the message is 1, among these N packets, we set PSH=1 such that total number of packets with PSH=1 is not divisible by 2.
-        If the bit in the message is 0, among these N packets, we set PSH=1 such that total number of packets with PSH=1 is divisible by 2.
+        Sender N and receiver N must be the same.
+
+        For each bit of the message, we generate N packets with some of them having PSH flag set randomly.
+        If the bit in the message is 1, among these N packets, we set PSH=1 such that total number of packets with PSH=1 is odd.
+        If the bit in the message is 0, among these N packets, we set PSH=1 such that total number of packets with PSH=1 is even.
+        Then, we send these N packets and continue with the next bit of the message.
+        
+        We calculate the start time as the time just after this function is called, end time as the time just after the last packet is sent.
+        Transmission time is the difference between end time and start time. Transmission rate is binary message length divided by transmission time.
         """
 
-        assert N > 1, "N should be bigger than 1"
+        start_time = time.time()
 
-        binary_message = self.generate_random_binary_message_with_logging(log_file_name)
-        # binary_message = self.convert_string_message_to_binary("a" * 3 + ".")
+        binary_message = self.generate_random_binary_message_with_logging(log_file_name, min_msg_length, max_msg_length)
 
         for bit in binary_message:
             packets = []
@@ -68,6 +73,11 @@ class MyCovertChannel(CovertChannelBase):
             for packet in packets:
                 super().send(packet)
 
+        end_time = time.time()
+        transmission_time = end_time - start_time
+        bps = len(binary_message) / transmission_time
+        print(f"Transmission time: {bps:.2f} bps")
+
     def process_packet(self, pkt, N):
         if self.pkt_counter % 2 == 0:
             self.packets.append(pkt)
@@ -100,10 +110,21 @@ class MyCovertChannel(CovertChannelBase):
 
     def receive(self, log_file_name, N):
         """
-        ------------------------- DÖKÜMANTASYON YAZILACAK ----------------------------------
-        """
+        N describes the number of packets that we receive for each bit of the message.
+        Sender N and receiver N must be the same.
 
-        assert N > 1, "N should be bigger than 1"
+        Due to the Scapy's working internals, sender sends 2 packets for each packet we send.
+        For example, if sender sends 4 packets, the actual packets that we send are the 0th and 2nd packets. 1st and 3rd packets should be eliminated.
+        That's why we use pkt_counter to check if the incoming packet is the actual packet.
+
+        For each incoming packet, we call process_packet() function. In it, we append the packet to packets array.
+        If length of packets array is N, we count the total number of packets such that PSH=1.
+        If total is even, receiver infers that the next message bit is 0 and appends that bit to bits string.
+        If total is odd, receiver infers that the next message bit is 1 and appends that bit to bits string.
+        Then we empty the packets array.
+        When bits string size becomes 8, we convert bits string into a char, append that char to the message and empty the bits string.
+        If the char is not ".", we continue sniffing packets. Else, we stop and write the message into log file.
+        """
 
         packets = sniff(filter="tcp",
                         prn=lambda pkt: self.process_packet(pkt, N),

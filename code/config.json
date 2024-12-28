@@ -3,6 +3,8 @@
   "send": {
     "parameters": {
       "log_file_name": "sender.log",
+      "min_msg_length": 16,
+      "max_msg_length": 16,
       "N": 3
     }
   },
